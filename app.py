@@ -29,7 +29,17 @@ if not data["px"] or "gold" not in data["px"]:
 bars = live_bars()
 spot = float(bars["Close"].dropna().iloc[-1]) if len(bars) else float(data["px"]["gold"]["Close"].iloc[-1])
 f = E.live_factors(data) if data["ry"] is not None else {}
-sc = E.score(f); lv = E.levels(data["px"]["gold"], spot); v = E.verdict(sc, spot, lv, data["walls"]); p = E.probs(sc)
+sc = E.score(f); lv = E.levels(data["px"]["gold"], spot); p = E.probs(sc)
+walls = None
+if data["walls"]:   # keep only levels on the useful side of price and within 4 ATR
+    A4 = 4 * lv["ATR"]
+    walls = dict(data["walls"])
+    walls["call_walls"] = [w for w in walls["call_walls"] if spot < w <= spot + A4]
+    walls["put_walls"] = [w for w in walls["put_walls"] if spot - A4 <= w < spot]
+v = E.verdict(sc, spot, lv, walls)
+_n = dt.datetime.utcnow(); _m = _n.hour * 60 + _n.minute
+if _n.weekday() == 5 or (_n.weekday() == 6 and _m < 23 * 60) or (_n.weekday() == 4 and _m >= 22 * 60):
+    st.info("Gold futures are closed (weekend). Showing the last price; it reopens Sunday about 23:00 UTC.")
 
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Gold (GC=F)", f"{spot:,.0f}"); c2.metric("Signal", v["signal"]); c3.metric("Score", v["score"])
@@ -37,11 +47,13 @@ c4.metric("Up / Range / Down", f"{p['up']:.0%} / {p['range']:.0%} / {p['down']:.
 
 fig = go.Figure(go.Candlestick(x=bars.index, open=bars["Open"], high=bars["High"], low=bars["Low"], close=bars["Close"]))
 for n in ("R2", "R1", "Pivot", "S1", "S2"):
-    fig.add_hline(y=lv[n], line_dash="dot", annotation_text=n)
-for w in (data["walls"] or {}).get("call_walls", []): fig.add_hline(y=w, line_color="red", annotation_text=("call wall" if (data["walls"] or {}).get("source") == "options" else "resistance (volume)"))
-for w in (data["walls"] or {}).get("put_walls", []): fig.add_hline(y=w, line_color="green", annotation_text=("put wall" if (data["walls"] or {}).get("source") == "options" else "support (volume)"))
+    fig.add_hline(y=lv[n], line_dash="dot", annotation_text=n, annotation_position="top left")
+for w in (walls or {}).get("call_walls", []): fig.add_hline(y=w, line_color="red", annotation_position="top left", annotation_text=("call wall" if (walls or {}).get("source") == "options" else "resistance (volume)"))
+for w in (walls or {}).get("put_walls", []): fig.add_hline(y=w, line_color="green", annotation_position="top left", annotation_text=("put wall" if (walls or {}).get("source") == "options" else "support (volume)"))
 fig.add_hrect(y0=v["buy_zone"][0], y1=v["buy_zone"][1], fillcolor="green", opacity=.15, line_width=0)
 fig.add_hrect(y0=v["sell_zone"][0], y1=v["sell_zone"][1], fillcolor="red", opacity=.15, line_width=0)
+_A = lv["ATR"]
+fig.update_yaxes(range=[min(spot - 2.5 * _A, v["buy_zone"][0] - .3 * _A), max(spot + 2.5 * _A, v["sell_zone"][1] + .3 * _A)])
 fig.update_layout(height=520, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=10, b=0))
 st.plotly_chart(fig, use_container_width=True)
 
