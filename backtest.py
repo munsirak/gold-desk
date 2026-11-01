@@ -3,6 +3,11 @@ import numpy as np, pandas as pd
 import feeds, engine as E
 
 
+def _sp(a, b):
+    """Spearman rank correlation without needing scipy."""
+    return a.rank().corr(b.rank())
+
+
 def run(X):
     f = E.hist_factors(X)
     keep = f[E.HISTORY_FACTORS].copy()
@@ -16,10 +21,10 @@ def run(X):
     strat = pos * df["r1"] - (pos.diff().abs().fillna(0) * 0.01)   # 1bp cost per flip
     sharpe = strat.mean() / strat.std() * np.sqrt(252) if strat.std() else float("nan")
     half = len(df) // 2
-    c1 = df["score"].iloc[:half].corr(df["r1"].iloc[:half], method="spearman")
-    c2 = df["score"].iloc[half:].corr(df["r1"].iloc[half:], method="spearman")
+    c1 = _sp(df["score"].iloc[:half], df["r1"].iloc[:half])
+    c2 = _sp(df["score"].iloc[half:], df["r1"].iloc[half:])
     curve = pd.DataFrame({"strategy_%": strat.cumsum(), "buy_and_hold_%": df["r1"].cumsum()})
-    return g, {"corr_first_half": c1, "corr_second_half": c2, "corr(score,next-day)": df["score"].corr(df["r1"], method="spearman"),
+    return g, {"corr_first_half": c1, "corr_second_half": c2, "corr(score,next-day)": _sp(df["score"], df["r1"]),
                "strategy_sharpe": sharpe, "buy_hold_sharpe": df["r1"].mean() / df["r1"].std() * np.sqrt(252),
                "days": len(df)}, curve
 
