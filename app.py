@@ -38,8 +38,8 @@ c4.metric("Up / Range / Down", f"{p['up']:.0%} / {p['range']:.0%} / {p['down']:.
 fig = go.Figure(go.Candlestick(x=bars.index, open=bars["Open"], high=bars["High"], low=bars["Low"], close=bars["Close"]))
 for n in ("R2", "R1", "Pivot", "S1", "S2"):
     fig.add_hline(y=lv[n], line_dash="dot", annotation_text=n)
-for w in (data["walls"] or {}).get("call_walls", []): fig.add_hline(y=w, line_color="red", annotation_text="call wall")
-for w in (data["walls"] or {}).get("put_walls", []): fig.add_hline(y=w, line_color="green", annotation_text="put wall")
+for w in (data["walls"] or {}).get("call_walls", []): fig.add_hline(y=w, line_color="red", annotation_text=("call wall" if (data["walls"] or {}).get("source") == "options" else "resistance (volume)"))
+for w in (data["walls"] or {}).get("put_walls", []): fig.add_hline(y=w, line_color="green", annotation_text=("put wall" if (data["walls"] or {}).get("source") == "options" else "support (volume)"))
 fig.add_hrect(y0=v["buy_zone"][0], y1=v["buy_zone"][1], fillcolor="green", opacity=.15, line_width=0)
 fig.add_hrect(y0=v["sell_zone"][0], y1=v["sell_zone"][1], fillcolor="red", opacity=.15, line_width=0)
 fig.update_layout(height=520, xaxis_rangeslider_visible=False, margin=dict(l=0, r=0, t=10, b=0))
