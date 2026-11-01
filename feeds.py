@@ -64,11 +64,24 @@ def option_walls(ratio, expiries=3, top=3):
         ch = t.option_chain(e)
         calls.append(ch.calls[["strike", "openInterest"]])
         puts.append(ch.puts[["strike", "openInterest"]])
+    if not calls:
+        raise ValueError("Yahoo returned no GLD option expiries")
     c = pd.concat(calls).groupby("strike")["openInterest"].sum()
     p = pd.concat(puts).groupby("strike")["openInterest"].sum()
     conv = lambda s: sorted((s.nlargest(top).index.values * ratio).round(0).tolist())
     return {"call_walls": conv(c), "put_walls": conv(p),
-            "put_call_oi": float(p.sum() / max(c.sum(), 1))}
+            "put_call_oi": float(p.sum() / max(c.sum(), 1)), "source": "options"}
+
+
+def volume_nodes(spot, top=3, step=5):
+    """Fallback: price levels where the most futures volume traded in the last 5 days.
+    Heavy-volume prices tend to act as support/resistance (resting orders cluster there)."""
+    df = intraday("GC=F", "5d", "5m").dropna(subset=["Close", "Volume"])
+    px = ((df["High"] + df["Low"] + df["Close"]) / 3 / step).round() * step
+    vol = df["Volume"].groupby(px).sum()
+    above = vol[vol.index > spot].nlargest(top).index.tolist()
+    below = vol[vol.index < spot].nlargest(top).index.tolist()
+    return {"call_walls": sorted(above), "put_walls": sorted(below), "put_call_oi": None, "source": "volume"}
 
 
 def premium_order_flow():
@@ -88,12 +101,21 @@ def collect(period="2y"):
             d[name] = fn(); status[name] = "ok"
         except Exception as e:
             d[name] = None; status[name] = f"failed: {type(e).__name__}"
+    g = None
     try:
-        g, l = d["px"]["gold"]["Close"].iloc[-1], d["px"]["gld"]["Close"].iloc[-1]
-        d["walls"] = option_walls(float(g / l)); status["options"] = "ok"
+        g = float(d["px"]["gold"]["Close"].iloc[-1])
+        l = float(d["px"]["gld"]["Close"].iloc[-1])
+        d["walls"] = option_walls(g / l)
+        status["options"] = "ok"
     except Exception as e:
-        d["walls"] = None; status["options"] = f"failed: {e}"
-d["flow"] = premium_order_flow()
+        d["walls"] = None
+        status["options"] = f"failed: {type(e).__name__} {e}"[:90]
+        try:
+            d["walls"] = volume_nodes(g)
+            status["levels"] = "using volume nodes instead of options"
+        except Exception as e2:
+            status["levels"] = f"failed: {type(e2).__name__} {e2}"[:90]
+    d["flow"] = premium_order_flow()
     status["order_flow"] = "ok" if d["flow"] else "not configured (needs paid feed)"
     d["status"] = status
     return d
