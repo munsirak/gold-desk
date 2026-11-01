@@ -92,8 +92,8 @@ def collect(period="2y"):
         g, l = d["px"]["gold"]["Close"].iloc[-1], d["px"]["gld"]["Close"].iloc[-1]
         d["walls"] = option_walls(float(g / l)); status["options"] = "ok"
     except Exception as e:
-        d["walls"] = None; status["options"] = f"failed: {type(e).__name__}"
-    d["flow"] = premium_order_flow()
+        d["walls"] = None; status["options"] = f"failed: {e}"
+d["flow"] = premium_order_flow()
     status["order_flow"] = "ok" if d["flow"] else "not configured (needs paid feed)"
     d["status"] = status
     return d
