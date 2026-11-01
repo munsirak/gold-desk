@@ -1,7 +1,7 @@
 """Run: streamlit run app.py"""
 import datetime as dt
 import pandas as pd, plotly.graph_objects as go, streamlit as st
-import feeds, engine as E
+import feeds, engine as E, backtest as B
 
 st.set_page_config(page_title="Gold Timing Desk", layout="wide")
 st.title("Gold Timing Desk (live)")
@@ -78,4 +78,15 @@ with b:
     c = data.get("cot")
     if c is not None: st.write(f"CFTC managed-money net: {c['mm_net'].iloc[-1]:,.0f} ({c.index[-1].date()}), change {c['mm_net'].diff().iloc[-1]:+,.0f}")
     if data["walls"]: st.write(data["walls"])
+with st.expander("Backtest: does this score have an edge?"):
+    st.write("Tests the 6 price-based factors on 10 years of daily data. COT, options and flow have no long free history, so they are not tested.")
+    if st.button("Run backtest"):
+        with st.spinner("Downloading 10 years and testing..."):
+            g, stats, curve = B.run(E.build_history(feeds.prices("10y"), feeds.real_yield()))
+        st.write("Average next-day gold move by score bucket")
+        st.dataframe(g.round(3))
+        st.json({k: round(float(v), 3) for k, v in stats.items()})
+        st.line_chart(curve)
+        edge = stats["corr(score,next-day)"] > 0.03 and stats["corr_first_half"] > 0 and stats["corr_second_half"] > 0 and stats["strategy_sharpe"] > stats["buy_hold_sharpe"]
+        st.success("Some edge shown in both halves. Still treat it as weak and test costs.") if edge else st.warning("No reliable edge: the score does not consistently predict the next day. Do not trade it as a signal.")
 st.caption("A decision aid, not a prediction or financial advice. Spot gold has no public order book; options walls, COT and volume are proxies.")
